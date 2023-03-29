@@ -1,0 +1,98 @@
+boundary        p p p
+units           real
+dimension       3
+newton          on on
+neighbor        2.0 bin
+neigh_modify    delay 0 every 1 check yes one 10000 page 100000
+atom_style      full
+
+special_bonds   lj/coul  0.0  0.0  1.0  dihedral yes
+#pair_style     buck/coul/long  15.0
+pair_style      hybrid/overlay table linear 2550 coul/long 15.0
+bond_style      harmonic
+angle_style     harmonic
+dihedral_style  hybrid  harmonic  multi/harmonic
+improper_style  harmonic
+kspace_style    pppm 1.0e-6
+
+read_data       PBX.data
+replicate       1 1 2
+#-------------------------------------------------------------
+# FORCE FIELD
+pair_coeff 1 1 table PSRDX_X6table.txt H1H1
+pair_coeff 1 2 table PSRDX_X6table.txt H1C2
+pair_coeff 1 3 table PSRDX_X6table.txt H1C3
+pair_coeff 1 4 table PSRDX_X6table.txt H1H4
+pair_coeff 1 5 table PSRDX_X6table.txt H1N5
+pair_coeff 1 6 table PSRDX_X6table.txt H1N6
+pair_coeff 1 7 table PSRDX_X6table.txt H1O7
+pair_coeff 1 8 table PSRDX_X6table.txt H1C8
+pair_coeff 2 2 table PSRDX_X6table.txt C2C2
+pair_coeff 2 3 table PSRDX_X6table.txt C2C3
+pair_coeff 2 4 table PSRDX_X6table.txt C2H4
+pair_coeff 2 5 table PSRDX_X6table.txt C2N5
+pair_coeff 2 6 table PSRDX_X6table.txt C2N6
+pair_coeff 2 7 table PSRDX_X6table.txt C2O7
+pair_coeff 2 8 table PSRDX_X6table.txt C2C8
+pair_coeff 3 3 table PSRDX_X6table.txt C3C3
+pair_coeff 3 4 table PSRDX_X6table.txt C3H4
+pair_coeff 3 5 table PSRDX_X6table.txt C3N5
+pair_coeff 3 6 table PSRDX_X6table.txt C3N6
+pair_coeff 3 7 table PSRDX_X6table.txt C3O7
+pair_coeff 3 8 table PSRDX_X6table.txt C3C8
+pair_coeff 4 4 table PSRDX_X6table.txt H4H4
+pair_coeff 4 5 table PSRDX_X6table.txt H4N5
+pair_coeff 4 6 table PSRDX_X6table.txt H4N6
+pair_coeff 4 7 table PSRDX_X6table.txt H4O7
+pair_coeff 4 8 table PSRDX_X6table.txt H4C8
+pair_coeff 5 5 table PSRDX_X6table.txt N5N5
+pair_coeff 5 6 table PSRDX_X6table.txt N5N6
+pair_coeff 5 7 table PSRDX_X6table.txt N5O7
+pair_coeff 5 8 table PSRDX_X6table.txt N5C8
+pair_coeff 6 6 table PSRDX_X6table.txt N6N6
+pair_coeff 6 7 table PSRDX_X6table.txt N6O7
+pair_coeff 6 8 table PSRDX_X6table.txt N6C8
+pair_coeff 7 7 table PSRDX_X6table.txt O7O7
+pair_coeff 7 8 table PSRDX_X6table.txt O7C8
+pair_coeff 8 8 table PSRDX_X6table.txt C8C8
+
+pair_coeff * * coul/long
+
+include         in.coeffs.PS_RDX_nopair
+
+thermo_style    custom etotal ke pe temp vol density pxx pyy pzz lx ly lz
+thermo_modify   line multi flush yes
+thermo          100
+run 0
+
+# Define variables
+variable        vpiston equal 2500           ## piston speed in (m/s) 
+variable        Up equal ${vpiston}*0.00001  ## unit: (A/fs)
+variable        negUp equal -2.0*${Up}
+
+fix             1 all nve
+fix             2 all deform 1 z vel ${negUp} remap v units box
+
+variable        nfreq equal 1000
+variable        nrep  equal 10
+variable        nevery equal  ${nfreq}/${nrep}
+
+
+group           dp molecule 50
+dump            1 dp atom ${nfreq} shockstep.dump
+
+#set group all image NULL NULL 0
+compute         cmol all chunk/atom molecule
+compute         c1 all com/chunk cmol
+fix             f1 all ave/time ${nevery} ${nrep} ${nfreq} c_c1[*] file coms.dat mode vector
+compute         c2 all temp/chunk cmol temp kecom internal com yes
+fix             f2 all ave/time ${nevery} ${nrep} ${nfreq} c_c2[*] file moltemps.profile mode vector
+compute         c3 all vcm/chunk cmol
+fix             f3 all ave/time ${nevery} ${nrep} ${nfreq} c_c3[*] file molvcms.profile mode vector
+
+restart         ${nfreq} *.rst
+
+timestep        0.5
+run             36000
+
+
